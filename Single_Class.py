@@ -10,7 +10,7 @@ from torch.nn.init import trunc_normal_
 import argparse
 from optimizers import StableAdamW
 from utils import evaluation_batch, WarmCosineScheduler, global_cosine_hm
-from logging import get_logger
+from utils_logging import get_logger
 
 from dataset import MVTecDataset, RealIADDataset, VisADataset, BTADDataset
 from dataset import get_data_transforms

@@ -5,6 +5,7 @@ def get_logger(name, save_path=None, level='INFO'):
     logger = logging.getLogger(name)
     logger.setLevel(getattr(logging, level))
 
+    # log_format = logging.Formatter('%(message)s')
     log_format = logging.Formatter('%(asctime)s.%(msecs)03d - %(levelname)s: %(message)s',
                                     datefmt='%y-%m-%d %H:%M:%S')
     streamHandler = logging.StreamHandler()

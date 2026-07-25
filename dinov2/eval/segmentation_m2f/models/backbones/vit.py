@@ -27,7 +27,7 @@ for some einops/einsum fun
 
 Hacked together by / Copyright 2021 Ross Wightman
 """
-import logging
+import utils_logging
 import math
 from functools import partial
 from itertools import repeat

@@ -210,16 +210,15 @@ class EfficientAttention(nn.Module):
         x = self.proj_drop(x)
         return x, context
 
-
 class Cross_Attention(nn.Module):
     def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
-        # self.scale = qk_scale or head_dim ** -0.5
         self.scale = nn.Parameter(torch.ones(num_heads, 1, 1), requires_grad=True)
         self.q = nn.Linear(dim, dim, bias=qkv_bias)
         self.kv = nn.Linear(dim, dim * 2, bias=qkv_bias)
+        # self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
@@ -242,8 +241,6 @@ class Cross_Attention_ReLU(nn.Module):
     def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
         super().__init__()
         self.num_heads = num_heads
-        head_dim = dim // num_heads
-        # self.scale = qk_scale or head_dim ** -0.5
         self.scale = nn.Parameter(torch.ones(num_heads, 1, 1), requires_grad=True)
         self.q = nn.Linear(dim, dim, bias=qkv_bias)
         self.kv = nn.Linear(dim, dim * 2, bias=qkv_bias)
@@ -379,10 +376,10 @@ class Block_ReLU(nn.Module):
 
 class Queries_Block(nn.Module):
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
-                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, attn=Attention):
+                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
         super().__init__()
         self.norm1 = norm_layer(dim)
-        self.attn = attn(
+        self.attn = Cross_Attention(
             dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
@@ -396,26 +393,6 @@ class Queries_Block(nn.Module):
         x = x + self.drop_path(self.mlp(self.norm2(x)))
         if return_attention:
             return x, attn
-        else:
-            return x
-
-class ConvBlock(nn.Module):
-    def __init__(self, dim, kernel_size=3, mlp_ratio=4., drop=0.,
-                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
-        super().__init__()
-        self.norm1 = norm_layer(dim)
-        self.conv = SepConv(dim, kernel_size=kernel_size, act1_layer=act_layer)
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.norm2 = norm_layer(dim)
-        mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
-
-    def forward(self, x, return_attention=False, attn_mask=None):
-        y = self.conv(self.norm1(x))
-        x = x + self.drop_path(y)
-        x = x + self.drop_path(self.mlp(self.norm2(x)))
-        if return_attention:
-            return x, None
         else:
             return x
 
@@ -433,35 +410,3 @@ class FeatureJitter(nn.Module):
             jitter = jitter * feature_norms * self.scale
             feature_tokens = feature_tokens + jitter
         return feature_tokens
-
-
-class SepConv(nn.Module):
-    r"""
-    Inverted separable convolution from MobileNetV2: https://arxiv.org/abs/1801.04381.
-    """
-
-    def __init__(self, dim, expansion_ratio=2,
-                 act1_layer=nn.GELU, act2_layer=nn.Identity,
-                 bias=False, kernel_size=7,
-                 **kwargs, ):
-        super().__init__()
-        med_channels = int(expansion_ratio * dim)
-        self.pwconv1 = nn.Linear(dim, med_channels, bias=bias)
-        self.act1 = act1_layer()
-        self.dwconv = nn.Conv2d(
-            med_channels, med_channels, kernel_size=kernel_size,
-            padding=kernel_size // 2, groups=med_channels, bias=bias)  # depthwise conv
-        self.act2 = act2_layer()
-        self.pwconv2 = nn.Linear(med_channels, dim, bias=bias)
-
-    def forward(self, x):
-        b, hxw, c = x.shape
-        h = int(math.sqrt(hxw))
-        x = self.pwconv1(x)
-        x = self.act1(x)
-        x = x.permute(0, 2, 1).reshape(b, -1, h, h)
-        x = self.dwconv(x)
-        x = x.permute(0, 2, 3, 1).reshape(b, hxw, -1)
-        x = self.act2(x)
-        x = self.pwconv2(x)
-        return x

@@ -6,7 +6,7 @@
 from collections import defaultdict, deque
 import datetime
 import json
-import logging
+import utils_logging
 import time
 
 import torch

@@ -62,6 +62,27 @@ def global_cosine_hm(a, b, alpha=1., factor=0.):
     return loss
 
 
+def scale_grad(grad, factor):
+    return grad * factor
+
+def global_cosine_hm_sg(a, b, alpha=3.0):
+    cos_loss = torch.nn.CosineSimilarity()
+    loss = 0
+    for item in range(len(a)):
+        a_ = a[item].detach()
+        b_ = b[item]
+        with torch.no_grad():
+            point_dist = 1 - cos_loss(a_, b_).unsqueeze(1).detach()
+        mean_dist = point_dist.mean() + 1e-8
+        factor = (point_dist / mean_dist) ** alpha
+        loss += torch.mean(1 - cos_loss(a_.reshape(a_.shape[0], -1),
+                                        b_.reshape(b_.shape[0], -1)))
+        b_.register_hook(partial(scale_grad, factor=factor))
+
+    loss = loss / len(a)
+    return loss
+
+
 def global_cosine_hm_percent(a, b, p=0.9, factor=0.):
     cos_loss = torch.nn.CosineSimilarity()
     loss = 0
@@ -295,7 +316,7 @@ def evaluation(model, dataloader, device, _class_=None, calc_pro=True, norm_fact
 
 
 def ader_evaluator(pr_px, pr_sp, gt_px, gt_sp,
-                   use_metrics=['I-AUROC', 'I-AP', 'I-F1_max', 'P-AUROC', 'P-AP', 'P-F1_max', 'AUPRO']):
+                   use_metrics=['I-AUROC', 'I-AP', 'P-AUROC', 'P-F1_max', 'AUPRO']):
     if len(gt_px.shape) == 4:
         gt_px = gt_px.squeeze(1)
     if len(pr_px.shape) == 4:
@@ -384,20 +405,10 @@ def evaluation_batch(model, dataloader, device, _class_=None, max_ratio=0, resiz
         pr_list_sp = torch.cat(pr_list_sp).flatten().cpu().numpy()
 
         # GPU acceleration
-        auroc_sp, ap_sp, f1_sp, auroc_px, ap_px, f1_px, aupro_px = ader_evaluator(pr_list_px, pr_list_sp, gt_list_px,
+        auroc_sp, ap_sp, auroc_px, f1_px, aupro_px = ader_evaluator(pr_list_px, pr_list_sp, gt_list_px,
                                                                                   gt_list_sp)
 
-        # Only CPU
-        # aupro_px = compute_pro(gt_list_px, pr_list_px)
-        # gt_list_px, pr_list_px = gt_list_px.ravel(), pr_list_px.ravel()
-        # auroc_px = roc_auc_score(gt_list_px, pr_list_px)
-        # auroc_sp = roc_auc_score(gt_list_sp, pr_list_sp)
-        # ap_px = average_precision_score(gt_list_px, pr_list_px)
-        # ap_sp = average_precision_score(gt_list_sp, pr_list_sp)
-        # f1_sp = f1_score_max(gt_list_sp, pr_list_sp)
-        # f1_px = f1_score_max(gt_list_px, pr_list_px)
-
-    return [auroc_sp, ap_sp, f1_sp, auroc_px, ap_px, f1_px, aupro_px]
+    return [auroc_sp, ap_sp, auroc_px, f1_px, aupro_px]
 
 
 def evaluation_batch_loco(model, dataloader, device, _class_=None, max_ratio=0):

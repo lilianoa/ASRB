@@ -4,7 +4,7 @@
 # found in the LICENSE file in the root directory of this source tree.
 
 from functools import partial
-import logging
+import utils_logging
 
 import torch
 from torch import nn

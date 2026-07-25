@@ -10,13 +10,13 @@ from tqdm import tqdm
 from torch.nn.init import trunc_normal_
 import argparse
 from optimizers import StableAdamW
-from utils import evaluation_batch, WarmCosineScheduler, global_cosine_hm
-from logging import get_logger
+from utils import evaluation_batch, WarmCosineScheduler, global_cosine_hm_sg
+from utils_logging import get_logger
 
 from dataset import MVTecDataset, RealIADDataset, VisADataset, BTADDataset
 from dataset import get_data_transforms
 from torchvision.datasets import ImageFolder
-from torch.utils.data import DataLoader, ConcatDataset
+from torch.utils.data import ConcatDataset
 
 from models import vit_encoder
 from models.uad import ASRB
@@ -142,12 +142,12 @@ def main(args):
     Q_Decoder = nn.ModuleList(Q_Decoder)
 
     model = ASRB(encoder=encoder,
-                        bottleneck=Q_Former,
-                        decoder=Q_Decoder,
-                        target_layers=target_layers,
-                        remove_class_token=True,
-                        fuse_layer=fuse_layer,
-                        queries=queries)
+                 bottleneck=Q_Former,
+                 decoder=Q_Decoder,
+                 target_layers=target_layers,
+                 remove_class_token=True,
+                 fuse_layer=fuse_layer,
+                 queries=queries)
     model = model.to(device)
 
     if args.phase == 'train':
@@ -174,8 +174,7 @@ def main(args):
             for img, _ in tqdm(train_dataloader, ncols=80):
                 img = img.to(device)
                 en, de = model(img)
-                loss = global_cosine_hm(en, de, alpha=3.0)
-                # loss = global_cosine_focal(en, de, p=0.9, alpha=3.0)
+                loss = global_cosine_hm_sg(en, de, alpha=3.0)
                 optimizer.zero_grad()
                 loss.backward()
                 nn.utils.clip_grad_norm(trainable.parameters(), max_norm=0.1)
@@ -193,28 +192,25 @@ def main(args):
 
                 if it == args.total_iters:
                     torch.save(model.state_dict(), os.path.join(args.save_dir, args.save_name, f'model_{it}.pth'))
-                    auroc_sp_list, ap_sp_list, f1_sp_list = [], [], []
-                    auroc_px_list, ap_px_list, f1_px_list, aupro_px_list = [], [], [], []
+                    auroc_sp_list, ap_sp_list, auroc_px_list, f1_px_list, aupro_px_list = [], [], [], [], []
 
                     for item, test_data in zip(args.item_list, test_data_list):
                         test_dataloader = torch.utils.data.DataLoader(test_data, batch_size=args.batch_size, shuffle=False,
                                                                       num_workers=4)
                         results = evaluation_batch(model, test_dataloader, device, max_ratio=0.005, resize_mask=args.crop_size, save_img=args.save_img, save_path=args.save_path)
-                        auroc_sp, ap_sp, f1_sp, auroc_px, ap_px, f1_px, aupro_px = results
+                        auroc_sp, ap_sp, auroc_px, f1_px, aupro_px = results
                         auroc_sp_list.append(auroc_sp)
                         ap_sp_list.append(ap_sp)
-                        f1_sp_list.append(f1_sp)
                         auroc_px_list.append(auroc_px)
-                        ap_px_list.append(ap_px)
                         f1_px_list.append(f1_px)
                         aupro_px_list.append(aupro_px)
                         print_fn(
-                            '{}: I-AUROC:{:.4f}, I-AP:{:.4f}, I-F1:{:.4f}, P-AUROC:{:.4f}, P-AP:{:.4f}, P-F1:{:.4f}, P-AUPRO:{:.4f}'.format(
-                                item, auroc_sp, ap_sp, f1_sp, auroc_px, ap_px, f1_px, aupro_px))
+                            '{}: I-AUROC:{:.4f}, I-AP:{:.4f}, P-AUROC:{:.4f}, P-F1:{:.4f}, P-AUPRO:{:.4f}'.format(
+                                item, auroc_sp, ap_sp, auroc_px, f1_px, aupro_px))
 
-                    print_fn('Mean: I-AUROC:{:.4f}, I-AP:{:.4f}, I-F1:{:.4f}, P-AUROC:{:.4f}, P-AP:{:.4f}, P-F1:{:.4f}, P-AUPRO:{:.4f}'.format(
-                            np.mean(auroc_sp_list), np.mean(ap_sp_list), np.mean(f1_sp_list),
-                            np.mean(auroc_px_list), np.mean(ap_px_list), np.mean(f1_px_list), np.mean(aupro_px_list)))
+                    print_fn('Mean: I-AUROC:{:.4f}, I-AP:{:.4f}, P-AUROC:{:.4f}, P-F1:{:.4f}, P-AUPRO:{:.4f}'.format(
+                            np.mean(auroc_sp_list), np.mean(ap_sp_list),
+                            np.mean(auroc_px_list), np.mean(f1_px_list), np.mean(aupro_px_list)))
                     model.train()
                     break
 
@@ -223,29 +219,24 @@ def main(args):
         model.load_state_dict(torch.load(os.path.join(args.save_dir, args.save_name, 'model_10000.pth')), strict=True)
         model.eval()
 
-        auroc_sp_list, ap_sp_list, f1_sp_list = [], [], []
-        auroc_px_list, ap_px_list, f1_px_list, aupro_px_list = [], [], [], []
+        auroc_sp_list, ap_sp_list, auroc_px_list, f1_px_list, aupro_px_list = [], [], [], [], []
 
         for item, test_data in zip(args.item_list, test_data_list):
             test_dataloader = torch.utils.data.DataLoader(test_data, batch_size=args.batch_size, shuffle=False,
                                                           num_workers=4)
             results = evaluation_batch(model, test_dataloader, device, max_ratio=0.005, resize_mask=args.crop_size, save_img=args.save_img, save_path=args.save_path)
-            auroc_sp, ap_sp, f1_sp, auroc_px, ap_px, f1_px, aupro_px = results
+            auroc_sp, ap_sp, auroc_px, f1_px, aupro_px = results
             auroc_sp_list.append(auroc_sp)
             ap_sp_list.append(ap_sp)
-            f1_sp_list.append(f1_sp)
             auroc_px_list.append(auroc_px)
-            ap_px_list.append(ap_px)
             f1_px_list.append(f1_px)
             aupro_px_list.append(aupro_px)
             print_fn(
-                '{}: I-AUROC:{:.4f}, I-AP:{:.4f}, I-F1:{:.4f}, P-AUROC:{:.4f}, P-AP:{:.4f}, P-F1:{:.4f}, P-AUPRO:{:.4f}'.format(
-                    item, auroc_sp, ap_sp, f1_sp, auroc_px, ap_px, f1_px, aupro_px))
-
-        print_fn(
-            'Mean: I-AUROC:{:.4f}, I-AP:{:.4f}, I-F1:{:.4f}, P-AUROC:{:.4f}, P-AP:{:.4f}, P-F1:{:.4f}, P-AUPRO:{:.4f}'.format(
-                np.mean(auroc_sp_list), np.mean(ap_sp_list), np.mean(f1_sp_list),
-                np.mean(auroc_px_list), np.mean(ap_px_list), np.mean(f1_px_list), np.mean(aupro_px_list)))
+                '{}: I-AUROC:{:.4f}, I-AP:{:.4f}, P-AUROC:{:.4f}, P-F1:{:.4f}, P-AUPRO:{:.4f}'.format(
+                    item, auroc_sp, ap_sp, auroc_px, f1_px, aupro_px))
+        print_fn('Mean: I-AUROC:{:.4f}, I-AP:{:.4f}, P-AUROC:{:.4f}, P-F1:{:.4f}, P-AUPRO:{:.4f}'.format(
+            np.mean(auroc_sp_list), np.mean(ap_sp_list),
+            np.mean(auroc_px_list), np.mean(f1_px_list), np.mean(aupro_px_list)))
 
 
 if __name__ == '__main__':
@@ -253,17 +244,17 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='')
 
     # dataset info
-    parser.add_argument('--dataset', type=str, default=r'MVTec-AD') # 'MVTec-AD' or 'VisA' or 'Real-IAD' or 'BTAD'
-    parser.add_argument('--data_path', type=str, default=r'./data/mvtec') # Replace it with your path.
+    parser.add_argument('--dataset', type=str, default=r'MVTec-AD')  # 'MVTec-AD' or 'VisA' or 'Real-IAD' or 'BTAD'
+    parser.add_argument('--data_path', type=str, default=r'./data/mvtec')  # Replace it with your path.
 
     # save info
-    parser.add_argument('--save_dir', type=str, default='./saved_results')
+    parser.add_argument('--save_dir', type=str, default='./results')
     parser.add_argument('--save_name', type=str, default='Multi-Class')
-    parser.add_argument('--save_img', type=bool, default=True, help="if save anomaly maps, True")
+    parser.add_argument('--save_img', type=bool, default=False, help="if save anomaly maps, True")
     parser.add_argument('--save_path', type=str, default='./save_imgs/mvtec', help="anomaly maps results path")
 
     # model info
-    parser.add_argument('--encoder', type=str, default='dinov2reg_vit_base_14') # 'dinov3_vitl16' 'dinov2reg_vit_small_14' or 'dinov2reg_vit_base_14' or 'dinov2reg_vit_large_14'
+    parser.add_argument('--encoder', type=str, default='dinov2reg_vit_base_14')
     parser.add_argument('--input_size', type=int, default=448)
     parser.add_argument('--crop_size', type=int, default=392)
     parser.add_argument('--queries_num', type=int, default=8)
@@ -271,7 +262,7 @@ if __name__ == '__main__':
     # training info
     parser.add_argument('--total_iters', type=int, default=10000)
     parser.add_argument('--batch_size', type=int, default=16)
-    parser.add_argument('--phase', type=str, default='test')
+    parser.add_argument('--phase', type=str, default='train')
 
     args = parser.parse_args()
     args.save_name = args.save_name + f'_dataset={args.dataset}_Encoder={args.encoder}_Resize={args.input_size}_Crop={args.crop_size}_num={args.queries_num}'

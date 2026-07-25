@@ -5,7 +5,7 @@
 
 import csv
 from enum import Enum
-import logging
+import utils_logging
 import os
 from typing import Callable, List, Optional, Tuple, Union
 

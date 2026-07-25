@@ -4,7 +4,7 @@
 # found in the LICENSE file in the root directory of this source tree.
 
 from collections import defaultdict
-import logging
+import utils_logging
 
 
 logger = logging.getLogger("dinov2")

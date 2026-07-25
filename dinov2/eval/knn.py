@@ -6,7 +6,7 @@
 import argparse
 from functools import partial
 import json
-import logging
+import utils_logging
 import os
 import sys
 from typing import List, Optional

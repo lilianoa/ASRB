@@ -4,7 +4,7 @@
 # found in the LICENSE file in the root directory of this source tree.
 
 import math
-import logging
+import utils_logging
 import os
 
 from omegaconf import OmegaConf

@@ -1,6 +1,5 @@
 import torch
 from torch.hub import HASH_REGEX, download_url_to_file, urlparse
-from dinov1 import vision_transformer
 from dinov2.models import vision_transformer as vision_transformer_dinov2
 import logging
 import os
@@ -13,9 +12,8 @@ os.makedirs(_WEIGHTS_DIR, exist_ok=True)
 def load(name):
     # if name in _BACKBONES.keys():
     #     return eval(_BACKBONES[name])
-
     arch, patchsize = name.split("_")[-2], name.split("_")[-1]
-    model = vision_transformer.__dict__[f'vit_{arch}'](patch_size=int(patchsize))
+
     if "dino" in name:
         if "v2" in name:
             if "reg" in name:
@@ -50,17 +48,6 @@ def load(name):
                         f"https://dl.fbaipublicfiles.com/dinov2/dinov2_vits{patchsize}/dinov2_vits{patchsize}_pretrain.pth")
                 else:
                     raise ValueError("Invalid type of architecture. It must be either 'small' or 'base'.")
-
-            state_dict = torch.load(ckpt_pth, map_location='cpu')
-        else:  # dinov1
-            if arch == "base":
-                ckpt_pth = download_cached_file(
-                    f"https://dl.fbaipublicfiles.com/dino/dino_vit{arch}{patchsize}_pretrain/dino_vit{arch}{patchsize}_pretrain.pth")
-            elif arch == "small":
-                ckpt_pth = download_cached_file(
-                    f"https://dl.fbaipublicfiles.com/dino/dino_deit{arch}{patchsize}_pretrain/dino_deit{arch}{patchsize}_pretrain.pth")
-            else:
-                raise ValueError("Invalid type of architecture. It must be either 'small' or 'base'.")
 
             state_dict = torch.load(ckpt_pth, map_location='cpu')
 

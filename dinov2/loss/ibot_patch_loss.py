@@ -8,7 +8,7 @@ import torch.distributed as dist
 import torch.nn.functional as F
 from torch import nn
 
-import logging
+import utils_logging
 
 
 logger = logging.getLogger("dinov2")

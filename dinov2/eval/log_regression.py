@@ -5,7 +5,7 @@
 
 import argparse
 import gc
-import logging
+import utils_logging
 import sys
 import time
 from typing import List, Optional

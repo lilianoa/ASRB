@@ -4,7 +4,7 @@
 # found in the LICENSE file in the root directory of this source tree.
 
 import argparse
-import logging
+import utils_logging
 import math
 import os
 from functools import partial
